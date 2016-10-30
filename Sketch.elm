@@ -6,8 +6,10 @@ module Sketch
         , move
         , named
         , random
-        , hsla
         , always
+        , calculate
+        , combine
+        , hsla
         )
 
 import Color exposing (Color)
@@ -33,6 +35,8 @@ type SketchNumber
     = ConstantNumber Float
     | RandomNumber { min : Float, max : Float }
     | NamedNumber String SketchNumber
+    | CalculatedNumber SketchNumber (Float -> Float)
+    | CombinedNumber (Float -> Float -> Float) SketchNumber SketchNumber
 
 
 type SketchColor
@@ -205,6 +209,16 @@ named name child =
     NamedNumber name child
 
 
+calculate : SketchNumber -> (Float -> Float) -> SketchNumber
+calculate base fn =
+    CalculatedNumber base fn
+
+
+combine : (Float -> Float -> Float) -> SketchNumber -> SketchNumber -> SketchNumber
+combine fn a b =
+    CombinedNumber fn a b
+
+
 type alias Context =
     { seed : Random.Seed
     , floatCache : Dict String Float
@@ -240,6 +254,23 @@ toFloat number context =
 
                 Just value ->
                     ( value, context )
+
+        CalculatedNumber base fn ->
+            let
+                ( value, newContext ) =
+                    toFloat base context
+            in
+                ( fn value, newContext )
+
+        CombinedNumber fn a b ->
+            let
+                ( aValue, context1 ) =
+                    toFloat a context
+
+                ( bValue, context2 ) =
+                    toFloat b context1
+            in
+                ( fn aValue bValue, context2 )
 
 
 hsla :

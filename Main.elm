@@ -17,8 +17,9 @@ main =
         x =
             Sketch.named "x" <| Sketch.random -250 250
 
-        -- baseAngle =
-        --     (Sketch.calculate x \(v -> (sin (10 * v / 500)) / 3))
+        baseAngle =
+            Sketch.calculate x
+                (\v -> (sin (10 * v / 500)) / 3)
     in
         Sketch.scene backgroundColor
             (Sketch.rectangle
@@ -32,7 +33,7 @@ main =
                         (Sketch.random 0.0 0.4)
                 }
                 |> Sketch.rotate
-                    (Sketch.random -0.5 0.5)
+                    (Sketch.combine (+) baseAngle (Sketch.random -0.5 0.5))
                 |> Sketch.move
                     x
                     (Sketch.random -250 250)
