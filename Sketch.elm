@@ -4,6 +4,7 @@ module Sketch
         , rectangle
         , rotate
         , move
+        , named
         , random
         , hsla
         , always
@@ -15,6 +16,7 @@ import Html exposing (Html)
 import Graphics.Render as Render
 import Random
 import Time
+import Dict exposing (Dict)
 
 
 type Shape
@@ -30,6 +32,7 @@ type Shape
 type SketchNumber
     = ConstantNumber Float
     | RandomNumber { min : Float, max : Float }
+    | NamedNumber String SketchNumber
 
 
 type SketchColor
@@ -72,10 +75,10 @@ scene backgroundColor shape =
                                 first :: rest ->
                                     first
 
-                        ( _, newSeed ) =
-                            renderShape shape currentSeed
+                        ( _, newContext ) =
+                            renderShape shape { seed = currentSeed, floatCache = Dict.empty }
                     in
-                        ( { model | seeds = newSeed :: model.seeds }
+                        ( { model | seeds = newContext.seed :: model.seeds }
                         , Cmd.none
                         )
 
@@ -101,56 +104,61 @@ renderScene sceneSize backgroundColor shape seeds =
         [ Render.rectangle sceneSize.width sceneSize.height
             |> Render.solidFill backgroundColor
         , seeds
-            |> List.map (\seed -> renderShape shape seed |> fst)
+            |> List.map
+                (\seed ->
+                    renderShape shape
+                        { seed = seed, floatCache = Dict.empty }
+                        |> fst
+                )
             |> Render.group
         ]
         |> Render.svg sceneSize.width sceneSize.height
 
 
-renderShape : Shape -> Random.Seed -> ( Render.Form msg, Random.Seed )
-renderShape shape seed =
+renderShape : Shape -> Context -> ( Render.Form msg, Context )
+renderShape shape context =
     case shape of
         Rectangle { width, height, color } ->
             let
-                ( widthValue, seed1 ) =
-                    toFloat width seed
+                ( widthValue, context1 ) =
+                    toFloat width context
 
-                ( heightValue, seed2 ) =
-                    toFloat height seed1
+                ( heightValue, context2 ) =
+                    toFloat height context1
 
-                ( colorValue, seed3 ) =
-                    toColor color seed2
+                ( colorValue, context3 ) =
+                    toColor color context2
             in
                 ( Render.rectangle widthValue heightValue
                     |> Render.solidFill colorValue
-                , seed3
+                , context3
                 )
 
         Rotate angle innerShape ->
             let
-                ( angleValue, seed1 ) =
-                    toFloat angle seed
+                ( angleValue, context1 ) =
+                    toFloat angle context
 
-                ( innerShapeValue, seed2 ) =
-                    renderShape innerShape seed1
+                ( innerShapeValue, context2 ) =
+                    renderShape innerShape context1
             in
                 ( Render.rotate angleValue innerShapeValue
-                , seed2
+                , context2
                 )
 
         Move x y innerShape ->
             let
-                ( xValue, seed1 ) =
-                    toFloat x seed
+                ( xValue, context1 ) =
+                    toFloat x context
 
-                ( yValue, seed2 ) =
-                    toFloat y seed1
+                ( yValue, context2 ) =
+                    toFloat y context1
 
-                ( innerShapeValue, seed3 ) =
-                    renderShape innerShape seed2
+                ( innerShapeValue, context3 ) =
+                    renderShape innerShape context2
             in
                 ( Render.move xValue yValue innerShapeValue
-                , seed2
+                , context2
                 )
 
 
@@ -192,14 +200,46 @@ always value =
     ConstantNumber value
 
 
-toFloat : SketchNumber -> Random.Seed -> ( Float, Random.Seed )
-toFloat number seed =
+named : String -> SketchNumber -> SketchNumber
+named name child =
+    NamedNumber name child
+
+
+type alias Context =
+    { seed : Random.Seed
+    , floatCache : Dict String Float
+    }
+
+
+toFloat : SketchNumber -> Context -> ( Float, Context )
+toFloat number context =
     case number of
         ConstantNumber value ->
-            ( value, seed )
+            ( value, context )
 
         RandomNumber { min, max } ->
-            Random.step (Random.float min max) seed
+            let
+                ( value, newSeed ) =
+                    Random.step (Random.float min max) context.seed
+            in
+                ( value, { context | seed = newSeed } )
+
+        NamedNumber name child ->
+            case Dict.get name context.floatCache of
+                Nothing ->
+                    let
+                        ( value, newContext ) =
+                            toFloat child context
+                    in
+                        ( value
+                        , { newContext
+                            | floatCache =
+                                Dict.insert name value newContext.floatCache
+                          }
+                        )
+
+                Just value ->
+                    ( value, context )
 
 
 hsla :
@@ -217,27 +257,27 @@ hsla hue saturation lightness alpha =
         }
 
 
-toColor : SketchColor -> Random.Seed -> ( Color, Random.Seed )
-toColor color seed =
+toColor : SketchColor -> Context -> ( Color, Context )
+toColor color context =
     case color of
         SketchColor { hue, saturation, lightness, alpha } ->
             let
-                ( hueValue, seed1 ) =
-                    toFloat hue seed
+                ( hueValue, context1 ) =
+                    toFloat hue context
 
-                ( saturationValue, seed2 ) =
-                    toFloat saturation seed1
+                ( saturationValue, context2 ) =
+                    toFloat saturation context1
 
-                ( lightnessValue, seed3 ) =
-                    toFloat lightness seed2
+                ( lightnessValue, context3 ) =
+                    toFloat lightness context2
 
-                ( alphaValue, seed4 ) =
-                    toFloat alpha seed3
+                ( alphaValue, context4 ) =
+                    toFloat alpha context3
             in
                 ( Color.hsla
                     (degrees <| hueValue)
                     saturationValue
                     lightnessValue
                     alphaValue
-                , seed4
+                , context4
                 )
