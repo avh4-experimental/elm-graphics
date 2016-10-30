@@ -24,6 +24,7 @@ main =
                     (Sketch.random 0.8 1.5)
                     (Sketch.random 0.0 0.4)
             }
+            |> Sketch.rotate (Sketch.random -0.5 0.5)
         )
 
 

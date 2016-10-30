@@ -1,4 +1,12 @@
-module Sketch exposing (scene, random, rectangle, hsla, always)
+module Sketch
+    exposing
+        ( scene
+        , rectangle
+        , rotate
+        , random
+        , hsla
+        , always
+        )
 
 import Color exposing (Color)
 import Html.App
@@ -14,6 +22,7 @@ type Shape
         , height : SketchNumber
         , color : SketchColor
         }
+    | Rotate SketchNumber Shape
 
 
 type SketchNumber
@@ -112,6 +121,18 @@ renderShape shape seed =
                 , seed3
                 )
 
+        Rotate angle innerShape ->
+            let
+                ( angleValue, seed1 ) =
+                    toFloat angle seed
+
+                ( innerShapeValue, seed2 ) =
+                    renderShape innerShape seed1
+            in
+                ( Render.rotate angleValue innerShapeValue
+                , seed2
+                )
+
 
 
 -- Shapes
@@ -125,6 +146,11 @@ rectangle :
     -> Shape
 rectangle =
     Rectangle
+
+
+rotate : SketchNumber -> Shape -> Shape
+rotate angle shape =
+    Rotate angle shape
 
 
 
