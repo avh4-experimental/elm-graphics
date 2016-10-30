@@ -3,6 +3,7 @@ module Sketch
         ( scene
         , rectangle
         , rotate
+        , move
         , random
         , hsla
         , always
@@ -23,6 +24,7 @@ type Shape
         , color : SketchColor
         }
     | Rotate SketchNumber Shape
+    | Move SketchNumber SketchNumber Shape
 
 
 type SketchNumber
@@ -40,7 +42,7 @@ type SketchColor
 
 
 type alias SceneState =
-    { seed : Random.Seed }
+    { seeds : List Random.Seed }
 
 
 type SceneMsg
@@ -55,23 +57,30 @@ scene backgroundColor shape =
 
         initialModel : SceneState
         initialModel =
-            { seed = Random.initialSeed 0 }
+            { seeds = [] }
 
+        update : SceneMsg -> SceneState -> ( SceneState, Cmd SceneMsg )
         update msg model =
             case msg of
                 NewRandomSeed ->
                     let
+                        currentSeed =
+                            case model.seeds of
+                                [] ->
+                                    Random.initialSeed 0
+
+                                first :: rest ->
+                                    first
+
                         ( _, newSeed ) =
-                            renderScene sceneSize backgroundColor shape model.seed
+                            renderShape shape currentSeed
                     in
-                        ( { model | seed = newSeed }, Cmd.none )
+                        ( { model | seeds = newSeed :: model.seeds }
+                        , Cmd.none
+                        )
 
         view model =
-            let
-                ( html, _ ) =
-                    renderScene sceneSize backgroundColor shape model.seed
-            in
-                html
+            renderScene sceneSize backgroundColor shape model.seeds
     in
         Html.App.program
             { init = ( initialModel, Cmd.none )
@@ -85,21 +94,17 @@ renderScene :
     { width : Float, height : Float }
     -> Color
     -> Shape
-    -> Random.Seed
-    -> ( Html msg, Random.Seed )
-renderScene sceneSize backgroundColor shape seed =
-    let
-        ( shapeValue, seed1 ) =
-            renderShape shape seed
-    in
-        ( Render.group
-            [ Render.rectangle sceneSize.width sceneSize.height
-                |> Render.solidFill backgroundColor
-            , shapeValue
-            ]
-            |> Render.svg sceneSize.width sceneSize.height
-        , seed1
-        )
+    -> List Random.Seed
+    -> Html msg
+renderScene sceneSize backgroundColor shape seeds =
+    Render.group
+        [ Render.rectangle sceneSize.width sceneSize.height
+            |> Render.solidFill backgroundColor
+        , seeds
+            |> List.map (\seed -> renderShape shape seed |> fst)
+            |> Render.group
+        ]
+        |> Render.svg sceneSize.width sceneSize.height
 
 
 renderShape : Shape -> Random.Seed -> ( Render.Form msg, Random.Seed )
@@ -133,6 +138,21 @@ renderShape shape seed =
                 , seed2
                 )
 
+        Move x y innerShape ->
+            let
+                ( xValue, seed1 ) =
+                    toFloat x seed
+
+                ( yValue, seed2 ) =
+                    toFloat y seed1
+
+                ( innerShapeValue, seed3 ) =
+                    renderShape innerShape seed2
+            in
+                ( Render.move xValue yValue innerShapeValue
+                , seed2
+                )
+
 
 
 -- Shapes
@@ -151,6 +171,11 @@ rectangle =
 rotate : SketchNumber -> Shape -> Shape
 rotate angle shape =
     Rotate angle shape
+
+
+move : SketchNumber -> SketchNumber -> Shape -> Shape
+move x y shape =
+    Move x y shape
 
 
 
