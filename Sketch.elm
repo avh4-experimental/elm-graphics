@@ -49,7 +49,9 @@ type SketchColor
 
 
 type alias SceneState =
-    { seeds : List Random.Seed }
+    { seed : Random.Seed
+    , pastShapes : List (Render.Form Never)
+    }
 
 
 type SceneMsg
@@ -64,30 +66,27 @@ scene backgroundColor shape =
 
         initialModel : SceneState
         initialModel =
-            { seeds = [] }
+            { seed = Random.initialSeed 0
+            , pastShapes = []
+            }
 
         update : SceneMsg -> SceneState -> ( SceneState, Cmd SceneMsg )
         update msg model =
             case msg of
                 NewRandomSeed ->
                     let
-                        currentSeed =
-                            case model.seeds of
-                                [] ->
-                                    Random.initialSeed 0
-
-                                first :: rest ->
-                                    first
-
-                        ( _, newContext ) =
-                            renderShape shape { seed = currentSeed, floatCache = Dict.empty }
+                        ( newShape, newContext ) =
+                            renderShape shape { seed = model.seed, floatCache = Dict.empty }
                     in
-                        ( { model | seeds = newContext.seed :: model.seeds }
+                        ( { model
+                            | seed = newContext.seed
+                            , pastShapes = newShape :: model.pastShapes
+                          }
                         , Cmd.none
                         )
 
         view model =
-            renderScene sceneSize backgroundColor shape model.seeds
+            renderScene sceneSize backgroundColor shape model.seed model.pastShapes
     in
         Html.App.program
             { init = ( initialModel, Cmd.none )
@@ -101,22 +100,19 @@ renderScene :
     { width : Float, height : Float }
     -> Color
     -> Shape
-    -> List Random.Seed
+    -> Random.Seed
+    -> List (Render.Form Never)
     -> Html msg
-renderScene sceneSize backgroundColor shape seeds =
+renderScene sceneSize backgroundColor shape seed pastShapes =
     Render.group
         [ Render.rectangle sceneSize.width sceneSize.height
             |> Render.solidFill backgroundColor
-        , seeds
-            |> List.map
-                (\seed ->
-                    renderShape shape
-                        { seed = seed, floatCache = Dict.empty }
-                        |> fst
-                )
+        , pastShapes
             |> Render.group
+        , renderShape shape { seed = seed, floatCache = Dict.empty } |> fst
         ]
         |> Render.svg sceneSize.width sceneSize.height
+        |> Html.App.map (\x -> Debug.crash "got a Never value")
 
 
 renderShape : Shape -> Context -> ( Render.Form msg, Context )
